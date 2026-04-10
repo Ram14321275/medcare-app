@@ -1,84 +1,88 @@
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, addDoc, onSnapshot, query, orderBy } from "firebase/firestore";
 import { Medicine, Status, Alert } from '../types/medicine';
 
-const STORAGE_KEY_MEDICINES = 'eldermed_medicines';
-const STORAGE_KEY_MISSED = 'eldermed_missed';
-const STORAGE_KEY_ALERTS = 'eldermed_alerts';
+const firebaseConfig = {
+  apiKey: "AIzaSyDSCCgIB--MDbzoET0zzCfUPfv3d25XKg8",
+  authDomain: "eldermed-db.firebaseapp.com",
+  projectId: "eldermed-db",
+  storageBucket: "eldermed-db.firebasestorage.app",
+  messagingSenderId: "444626262722",
+  appId: "1:444626262722:web:489a329012cfd05b67795b",
+  measurementId: "G-SSY77CXL8K"
+};
 
-// Initialize default data if empty
-if (!localStorage.getItem(STORAGE_KEY_MEDICINES)) {
-  localStorage.setItem(STORAGE_KEY_MEDICINES, JSON.stringify([
-    { id: '1', name: 'Aspirin', image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500&auto=format&fit=crop&q=60', time_slot: 'morning' },
-    { id: '2', name: 'Vitamin C', image: 'https://images.unsplash.com/photo-1550572017-edb731dd1da0?w=500&auto=format&fit=crop&q=60', time_slot: 'afternoon' }
-  ]));
-}
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-if (!localStorage.getItem(STORAGE_KEY_MISSED)) {
-  localStorage.setItem(STORAGE_KEY_MISSED, JSON.stringify([]));
-}
+// Use an EventTarget to mimic the old local BroadcastChannel behavior for seamless React compatibility
+const eventBus = new EventTarget();
 
-if (!localStorage.getItem(STORAGE_KEY_ALERTS)) {
-  localStorage.setItem(STORAGE_KEY_ALERTS, JSON.stringify([]));
-}
+// 🚀 REAL-TIME CLOUD LISTENERS: these trigger UI updates across ALL connected devices instantly!
+onSnapshot(collection(db, 'medicines'), () => {
+    eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'MEDICINES_UPDATED' } }));
+});
 
-// Communication channel for cross-tab real-time updates
-const channel = new BroadcastChannel('eldermed_channel');
+onSnapshot(collection(db, 'alerts'), () => {
+    eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'NEW_ALERT' } }));
+});
+
+onSnapshot(collection(db, 'missed'), () => {
+    eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'STATUS_UPDATED' } }));
+});
+
 
 export const api = {
   getCurrentMedicines: async (): Promise<Medicine[]> => {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_MEDICINES) || '[]');
+    const snap = await getDocs(collection(db, 'medicines'));
+    const meds: Medicine[] = [];
+    snap.forEach(d => meds.push(d.data() as Medicine));
+    return meds;
   },
   
   addMedicine: async (medicine: Medicine): Promise<{ success: boolean }> => {
-    const meds = JSON.parse(localStorage.getItem(STORAGE_KEY_MEDICINES) || '[]');
-    meds.push(medicine);
-    localStorage.setItem(STORAGE_KEY_MEDICINES, JSON.stringify(meds));
-    channel.postMessage({ type: 'MEDICINES_UPDATED' });
+    await setDoc(doc(db, 'medicines', medicine.id), medicine);
     return { success: true };
   },
 
   updateMedicine: async (medicine: Medicine): Promise<{ success: boolean }> => {
-    const meds = JSON.parse(localStorage.getItem(STORAGE_KEY_MEDICINES) || '[]');
-    const index = meds.findIndex((m: Medicine) => m.id === medicine.id);
-    if (index !== -1) {
-      meds[index] = medicine;
-      localStorage.setItem(STORAGE_KEY_MEDICINES, JSON.stringify(meds));
-      channel.postMessage({ type: 'MEDICINES_UPDATED' });
-    }
+    await setDoc(doc(db, 'medicines', medicine.id), medicine);
     return { success: true };
   },
 
   deleteMedicine: async (id: string): Promise<{ success: boolean }> => {
-    let meds = JSON.parse(localStorage.getItem(STORAGE_KEY_MEDICINES) || '[]');
-    meds = meds.filter((m: Medicine) => m.id !== id);
-    localStorage.setItem(STORAGE_KEY_MEDICINES, JSON.stringify(meds));
-    channel.postMessage({ type: 'MEDICINES_UPDATED' });
+    await deleteDoc(doc(db, 'medicines', id));
     return { success: true };
   },
 
   postMedicineStatus: async (status: Status): Promise<{ success: boolean }> => {
     if (status.status === 'missed') {
-      const missed = JSON.parse(localStorage.getItem(STORAGE_KEY_MISSED) || '[]');
-      const meds = JSON.parse(localStorage.getItem(STORAGE_KEY_MEDICINES) || '[]');
-      const med = meds.find((m: Medicine) => m.name === status.name);
+      const snap = await getDocs(collection(db, 'medicines'));
+      let med: any = null;
+      snap.forEach(d => {
+         if (d.data().name === status.name) {
+             med = d.data();
+         }
+      });
       if (med) {
-        missed.push(med);
-        localStorage.setItem(STORAGE_KEY_MISSED, JSON.stringify(missed));
+        await addDoc(collection(db, 'missed'), med);
       }
     }
     
-    // Create an alert for taken or missed
     api.createAlert({
       timestamp: new Date().toISOString(),
       type: status.status === 'taken' ? 'info' : 'missed',
       message: `${status.name} was ${status.status}.`
     });
 
-    channel.postMessage({ type: 'STATUS_UPDATED' });
     return { success: true };
   },
 
   getMissedMedicines: async (): Promise<Medicine[]> => {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_MISSED) || '[]');
+    const snap = await getDocs(collection(db, 'missed'));
+    const meds: Medicine[] = [];
+    snap.forEach(d => meds.push(d.data() as Medicine));
+    return meds;
   },
 
   postAlert: async (message: string = 'SOS Alert Triggered!', photo?: string): Promise<{ success: boolean }> => {
@@ -91,19 +95,21 @@ export const api = {
     return { success: true };
   },
 
-  createAlert: (alert: Alert) => {
-    const alerts = JSON.parse(localStorage.getItem(STORAGE_KEY_ALERTS) || '[]');
-    alerts.unshift(alert); // Add to beginning
-    localStorage.setItem(STORAGE_KEY_ALERTS, JSON.stringify(alerts));
-    channel.postMessage({ type: 'NEW_ALERT', alert });
+  createAlert: async (alert: Alert) => {
+    await addDoc(collection(db, 'alerts'), alert);
   },
 
   getAlerts: async (): Promise<Alert[]> => {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_ALERTS) || '[]');
+    const q = query(collection(db, 'alerts'), orderBy('timestamp', 'desc'));
+    const snap = await getDocs(q);
+    const alerts: Alert[] = [];
+    snap.forEach(d => alerts.push(d.data() as Alert));
+    return alerts;
   },
 
   subscribe: (callback: (event: MessageEvent) => void) => {
-    channel.addEventListener('message', callback);
-    return () => channel.removeEventListener('message', callback);
+    const handler = callback as EventListener;
+    eventBus.addEventListener('message', handler);
+    return () => eventBus.removeEventListener('message', handler);
   }
 };
