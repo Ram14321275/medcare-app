@@ -38,7 +38,7 @@ export const speak = async (text: string, language: Language) => {
     }
 
     const shortCode = shortLangMap[language] || 'en';
-    const url = `/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${shortCode}&client=gtx`;
+    const url = `/api/tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${shortCode}&client=gtx`;
     
     currentAudio.src = url;
     currentAudio.load();
