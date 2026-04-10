@@ -10,14 +10,16 @@ interface Props {
 }
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
+
+const GEMINI_API_KEY = "AIzaSyAf5B8yqRufS3C0ryRH6UBkHGn8rKcAoDY";
 
 const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
   const { t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I am Kind, your eldercare AI assistant. How can I help you today?' }
+    { role: 'assistant', content: 'Hello! I am Kind, your eldercare AI assistant powered by Google Gemini. How can I help you today?' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,14 +43,13 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
       CRITICAL INSTRUCTION: DO NOT use any tools or output JSON unless the caregiver EXPLICITLY asks you to add, edit, change, update, or delete a specific medicine. If they just say "Hello", "How are you", or ask a general question, just reply normally using text without executing any tool. Never assume or guess a medicine to delete.
       IF ADDING A MEDICINE: You MUST know the requested time slot (morning, afternoon, or night) BEFORE calling the add_medicine tool. If the caregiver did not specify the time slot, DO NOT call the tool. Instead, ask them "What time of day should this medicine be taken?" and wait for their reply.`;
 
-      // Security/Guardrail: Only expose the tool definitions to the AI if the user's prompt actually suggests modifying the schedule.
       const isToolIntent = /add|update|edit|change|delete|remove|schedule/i.test(userMsg);
       
       const requestBody: any = {
-        model: 'Kind',
+        model: 'gemini-1.5-flash',
         messages: [
            { role: 'system', content: systemPrompt },
-           ...messages.map(m => ({ role: m.role, content: m.content })),
+           ...messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content })),
            { role: 'user', content: userMsg }
         ],
         stream: false
@@ -108,18 +109,22 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
         ];
       }
 
-      const response = await fetch('/api/chat', {
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${GEMINI_API_KEY}`
+        },
         body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch from Ollama');
+        throw new Error('Failed to fetch from Gemini');
       }
 
       const data = await response.json();
-      let assistantResponse = data.message?.content || '';
+      const responseMessage = data.choices?.[0]?.message || {};
+      let assistantResponse = responseMessage.content || '';
 
       const executeTool = async (name: string, args: any) => {
         const toolName = name.toLowerCase();
@@ -173,10 +178,6 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
             } else {
               return `\n\n❌ I couldn't find a medicine named "${args.current_name}" to edit.`;
             }
-          } else if (toolName === 'get_medicine_schedule') {
-             const meds = await api.getCurrentMedicines();
-             if (meds.length === 0) return `\n\n📋 The elder's schedule is currently empty.`;
-             return `\n\n📋 Current Medicines:\n` + meds.map(m => `- ${m.name} (${m.time_slot})`).join('\n');
           }
         } catch(e) {
           console.error("Tool execution error", e);
@@ -184,39 +185,20 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
         return '';
       };
 
-      // 1. Fallback for Models that output raw JSON objects in the content (e.g., Llama 3 via Ollama sometimes)
-      let cleanedResponse = assistantResponse;
-      const jsonRegex = /\{[\s\S]*?"name"\s*:\s*"[^"]*"[\s\S]*?"parameters"\s*:\s*\{[\s\S]*\}\s*\}/g;
-      const matches = assistantResponse.match(jsonRegex);
-      
-      if (matches) {
-        for (const str of matches) {
-          try {
-            const obj = JSON.parse(str);
-            if (obj.name && obj.parameters) {
-               const toolResult = await executeTool(obj.name, obj.parameters);
-               // Replace the ugly JSON in the chat output with the friendly result
-               cleanedResponse = cleanedResponse.replace(str, toolResult);
-            }
-          } catch(e) { /* ignore bad json */ }
-        }
-      }
-      assistantResponse = cleanedResponse;
-
-      // 2. Handle standard Native Native Tool Calls
-      if (data.message?.tool_calls?.length > 0) {
-        for (const call of data.message.tool_calls) {
-           const toolResult = await executeTool(call.function.name, call.function.arguments);
+      // Handle Gemini/OpenAI standard tool calls
+      if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+        for (const call of responseMessage.tool_calls) {
+           const parsedArgs = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
+           const toolResult = await executeTool(call.function.name, parsedArgs);
            assistantResponse += toolResult;
         }
       }
 
-      // If the model truly returns absolutely nothing (no text, no tools), inject a gentle safe response.
       const finalMsg = assistantResponse.trim() || 'I have checked the schedule as requested.';
       setMessages(prev => [...prev, { role: 'assistant', content: finalMsg }]);
     } catch (error) {
        console.error(error);
-       setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble connecting. Please make sure Ollama is running locally and the model 'Kind' is available!" }]);
+       setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble reaching Google's servers. Please try again soon." }]);
     } finally {
        setLoading(false);
     }
