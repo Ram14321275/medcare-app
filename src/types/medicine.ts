@@ -13,8 +13,17 @@ export interface Status {
 }
 
 export interface Alert {
+  id?: string;
   timestamp: string;
   type: string;
   message: string;
-  photo?: string;
+  photo?: string | null;
+}
+
+export interface ElderProfile {
+  name: string;
+  age: string;
+  bloodType: string;
+  allergies: string;
+  emergencyContact: string;
 }

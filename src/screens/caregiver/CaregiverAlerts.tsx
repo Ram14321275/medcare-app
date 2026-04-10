@@ -4,7 +4,7 @@ import Header from '../../components/Header';
 import { useLanguage } from '../../context/LanguageContext';
 import { api } from '../../api/api';
 import { Alert } from '../../types/medicine';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Trash2, ImageOff } from 'lucide-react';
 
 interface Props {
   onBack: () => void;
@@ -22,22 +22,32 @@ const CaregiverAlerts: React.FC<Props> = ({ onBack }) => {
 
   useEffect(() => {
     fetchAlerts();
-
-    // Subscribe to real-time events, if another tab creates an alert
-    const unsubscribe = api.subscribe((e) => {
+    const unsubscribe = api.subscribe((e: any) => {
       if (e.data.type === 'NEW_ALERT' || e.data.type === 'STATUS_UPDATED') {
         fetchAlerts();
-        
-        // Let the caregiver know if SOS triggered!
-        if (e.data.alert?.type === 'emergency') {
-           // We could play a loud noise or use Notification API here
-           alert("🚨 EMERGENCY SOS TRIGGERED BY ELDER! 🚨");
-        }
       }
     });
 
     return unsubscribe;
   }, []);
+
+  const handleDelete = async (e: React.MouseEvent, id: string | undefined) => {
+    e.stopPropagation();
+    if (!id) return;
+    if (confirm("Are you sure you want to delete this alert?")) {
+      await api.deleteAlert(id);
+      fetchAlerts();
+    }
+  };
+
+  const handleRemovePhoto = async (e: React.MouseEvent, id: string | undefined) => {
+    e.stopPropagation();
+    if (!id) return;
+    if (confirm("Remove the photo from this alert?")) {
+      await api.removeAlertPhoto(id);
+      fetchAlerts();
+    }
+  };
 
   return (
     <ScreenWrapper className="bg-orange-50">
@@ -54,26 +64,45 @@ const CaregiverAlerts: React.FC<Props> = ({ onBack }) => {
             <div 
               key={i} 
               onClick={() => alert.photo && setSelectedPhoto(alert.photo)}
-              className={`p-6 rounded-3xl border-2 shadow-sm flex flex-col gap-2 transition-all hover:scale-[1.01] cursor-pointer
+              className={`p-6 rounded-3xl border-2 shadow-sm flex flex-col gap-2 transition-all hover:scale-[1.01] cursor-pointer relative group
               ${alert.type === 'emergency' ? 'bg-red-50 border-red-300 animate-pulse' : 
                 alert.type === 'missed' ? 'bg-white border-orange-200' : 'bg-white border-gray-200'}
             `}>
-              <div className="flex justify-between items-center">
-                <span className={`font-black uppercase text-sm px-3 py-1 rounded-full
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                <span className={`font-black uppercase text-sm px-3 py-1 rounded-full self-start
                   ${alert.type === 'emergency' ? 'bg-red-200 text-red-800' : 
                     alert.type === 'missed' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600'}
                 `}>{alert.type || 'info'}</span>
-                <span className="text-gray-500 font-semibold text-sm">
+                
+                <div className="flex items-center gap-2 text-gray-500 font-semibold text-sm">
                   {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                  <button 
+                    onClick={(e) => handleDelete(e, alert.id)}
+                    className="p-2 ml-2 bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-500 rounded-full transition-colors"
+                    title="Delete Alert"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <p className={`text-2xl font-bold mt-2 ${alert.type === 'emergency' ? 'text-red-900' : 'text-gray-800'}`}>
                 {alert.message}
               </p>
               {alert.photo && (
-                <div className="mt-4 rounded-xl overflow-hidden border-4 border-red-500 shadow-lg">
-                  <div className="bg-red-500 text-white font-bold text-center py-2 text-sm uppercase tracking-widest">Tap to Enlarge</div>
+                <div className="mt-4 relative rounded-xl overflow-hidden border-4 border-red-500 shadow-lg inline-block">
+                  <div className="bg-red-500 text-white font-bold text-center py-2 text-sm uppercase tracking-widest">
+                    Tap to Enlarge
+                  </div>
                   <img src={alert.photo} alt="SOS Snapshot" className="w-full h-auto object-cover max-h-48" />
+                  
+                  {/* Remove Photo Button */}
+                  <button 
+                    onClick={(e) => handleRemovePhoto(e, alert.id)}
+                    className="absolute top-10 right-2 p-2 bg-black/60 hover:bg-red-600 text-white rounded-full transition-colors backdrop-blur-sm"
+                    title="Remove Photo"
+                  >
+                    <ImageOff className="w-5 h-5" />
+                  </button>
                 </div>
               )}
             </div>

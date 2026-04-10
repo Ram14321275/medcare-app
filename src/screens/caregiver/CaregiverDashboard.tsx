@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import Header from '../../components/Header';
-import { Pill, AlertCircle, Settings, User, LogOut, Bot } from 'lucide-react';
+import { Pill, AlertCircle, Settings, User, LogOut, Bot, ChevronRight, Activity } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { api } from '../../api/api';
 import { Medicine } from '../../types/medicine';
@@ -19,82 +19,97 @@ const CaregiverDashboard: React.FC<Props> = ({ onNavigate, onLogout }) => {
   const fetchData = async () => {
     const medicines = await api.getCurrentMedicines();
     const missed = await api.getMissedMedicines();
-    
     setTotalMeds(medicines.length);
     setMissedCount(missed.length);
   };
 
   useEffect(() => {
     fetchData();
-
-    const unsubscribe = api.subscribe((e) => {
+    const unsubscribe = api.subscribe((e: any) => {
       if (e.data.type === 'STATUS_UPDATED' || e.data.type === 'MEDICINES_UPDATED') {
         fetchData();
       }
     });
-
     return unsubscribe;
   }, []);
 
-  const adherence = totalMeds === 0 ? 100 : Math.round(((totalMeds - missedCount) / totalMeds) * 100);
+  const adherence = totalMeds === 0 ? 100 : Math.max(0, Math.round(((totalMeds - missedCount) / totalMeds) * 100));
 
   return (
     <ScreenWrapper>
-      <div className="flex items-center justify-between w-full">
-        <Header title={t('dashboard')} subtitle="Overview" />
-        <button onClick={onLogout} className="p-4 bg-gray-200 rounded-full hover:bg-gray-300">
-          <LogOut className="w-8 h-8 text-gray-700" />
+      <div className="flex items-center justify-between w-full pb-4">
+        <Header title={t('dashboard')} subtitle="Family Workspace" />
+        <button onClick={onLogout} className="p-3 bg-white/60 backdrop-blur-md rounded-2xl shadow-sm border border-white hover:bg-white transition-colors">
+          <LogOut className="w-6 h-6 text-indigo-600" />
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 mt-8 gap-6 px-1">
-        <div className="glass-panel p-6 rounded-[2rem] flex flex-col justify-between h-48 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-          <h3 className="text-2xl font-bold text-gray-700 z-10">{t('adherence')}</h3>
-          <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-emerald-600 z-10">{Math.max(0, adherence)}%</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 mt-2 gap-4">
+        {/* Adherence Card */}
+        <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl border border-white shadow-xl shadow-indigo-100/50 flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+          <div className="flex items-center gap-3 mb-6 relative z-10">
+             <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl">
+               <Activity className="w-6 h-6" />
+             </div>
+             <h3 className="text-xl font-bold text-gray-800">{t('adherence')}</h3>
+          </div>
+          
+          <div className="flex items-end gap-3 relative z-10">
+            <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-indigo-500 to-purple-600 tracking-tighter leading-none">
+              {adherence}%
+            </div>
+            <span className="text-gray-400 font-semibold mb-2">Overall Score</span>
+          </div>
         </div>
         
-        <div className="glass-panel p-6 rounded-[2rem] flex flex-col justify-between h-48 cursor-pointer relative overflow-hidden group" onClick={() => onNavigate('alerts')}>
-          <div className="absolute inset-0 bg-gradient-to-br from-red-400/10 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-          <h3 className="text-2xl font-bold text-gray-700 z-10">{t('missedMedicines')}</h3>
-          <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-600 z-10">{missedCount}</div>
+        {/* Alerts Card */}
+        <div 
+          onClick={() => onNavigate('alerts')}
+          className="bg-red-500 p-8 rounded-3xl shadow-xl shadow-red-200/50 flex flex-col justify-between cursor-pointer relative overflow-hidden group hover:bg-red-600 transition-colors"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
+          <div className="flex items-center justify-between mb-6 relative z-10">
+             <div className="flex items-center gap-3">
+               <div className="p-3 bg-white/20 text-white rounded-2xl">
+                 <AlertCircle className="w-6 h-6" />
+               </div>
+               <h3 className="text-xl font-bold text-white">{t('missedMedicines')}</h3>
+             </div>
+             <ChevronRight className="w-6 h-6 text-white/50 group-hover:text-white transition-colors" />
+          </div>
+          
+          <div className="flex items-end gap-3 relative z-10">
+            <div className="text-7xl font-black text-white tracking-tighter leading-none">
+              {missedCount}
+            </div>
+            <span className="text-red-100 font-semibold mb-2">Requires Attention</span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mt-8 px-1">
-        <button onClick={() => onNavigate('chatbot')} className="glass-button p-6 rounded-[2rem] flex flex-col items-center justify-center gap-4 h-36 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-teal-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <Bot className="w-12 h-12 text-teal-600 drop-shadow-md z-10 transform group-hover:scale-110 transition-transform" />
-          <span className="font-bold text-teal-900 truncate w-full text-center z-10 text-lg">{t('chatbot')}</span>
-        </button>
-        <button onClick={() => onNavigate('medicines')} className="glass-button p-6 rounded-[2rem] flex flex-col items-center justify-center gap-4 h-36 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <Pill className="w-12 h-12 text-blue-600 drop-shadow-md z-10 transform group-hover:scale-110 transition-transform" />
-          <span className="font-bold text-blue-900 z-10 text-lg">{t('medicines')}</span>
-        </button>
-        <button onClick={() => onNavigate('alerts')} className="glass-button p-6 rounded-[2rem] flex flex-col items-center justify-center gap-4 h-36 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <AlertCircle className="w-12 h-12 text-orange-600 drop-shadow-md z-10 transform group-hover:scale-110 transition-transform" />
-          <span className="font-bold text-orange-900 z-10 text-lg">{t('alerts')}</span>
-        </button>
-        <button onClick={() => onNavigate('profile')} className="glass-button p-6 rounded-[2rem] flex flex-col items-center justify-center gap-4 h-36 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <User className="w-12 h-12 text-purple-600 drop-shadow-md z-10 transform group-hover:scale-110 transition-transform" />
-          <span className="font-bold text-purple-900 z-10 text-lg">{t('profile')}</span>
-        </button>
-        <button onClick={() => onNavigate('settings')} className="glass-button p-6 rounded-[2rem] flex flex-col items-center justify-center gap-4 h-36 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <Settings className="w-12 h-12 text-gray-700 drop-shadow-md z-10 transform group-hover:scale-110 transition-transform" />
-          <span className="font-bold text-gray-900 z-10 text-lg">{t('settings')}</span>
-        </button>
+      <h3 className="mt-10 mb-4 text-xl font-black text-gray-800 tracking-tight">Management Tools</h3>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { id: 'chatbot', label: t('chatbot'), icon: Bot, color: 'text-teal-600', bg: 'bg-teal-50' },
+          { id: 'medicines', label: t('medicines'), icon: Pill, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { id: 'profile', label: t('profile'), icon: User, color: 'text-purple-600', bg: 'bg-purple-50' },
+          { id: 'settings', label: t('settings'), icon: Settings, color: 'text-slate-600', bg: 'bg-slate-50' },
+        ].map((item: any) => (
+          <button 
+            key={item.id}
+            onClick={() => onNavigate(item.id)} 
+            className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-white shadow-lg shadow-indigo-100/30 flex flex-col items-center justify-center gap-4 relative overflow-hidden group hover:-translate-y-1 transition-all"
+          >
+            <div className={`p-4 rounded-2xl ${item.bg} group-hover:scale-110 transition-transform`}>
+              <item.icon className={`w-8 h-8 ${item.color}`} />
+            </div>
+            <span className="font-bold text-gray-700 text-md tracking-tight">{item.label}</span>
+          </button>
+        ))}
       </div>
 
-      <div className="mt-8 mb-4 px-1">
-        <div className="glass-button p-6 rounded-[2rem] cursor-pointer" onClick={() => onNavigate('medicines')}>
-          <h3 className="text-xl font-bold text-gray-700 mb-4">{t('medicines')} Schedule Overview</h3>
-          <p className="text-gray-500 font-semibold">{totalMeds} total scheduled active medicines</p>
-        </div>
-      </div>
     </ScreenWrapper>
   );
 };

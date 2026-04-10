@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './api/api';
+import { auth, api } from './api/api';
+import { useLanguage } from './context/LanguageContext';
 import LanguageSelection from './screens/LanguageSelection';
 import RoleSelection from './screens/RoleSelection';
 import ElderFlow from './screens/elder/ElderFlow';
@@ -12,8 +13,13 @@ import { HeartPulse } from 'lucide-react';
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [langSelected, setLangSelected] = useState(false);
+  const { isLanguageSelected, setIsLanguageSelected } = useLanguage();
   const [role, setRole] = useState<'elder' | 'caregiver' | null>(null);
+  
+  const roleRef = useRef(role);
+  useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -23,9 +29,21 @@ function App() {
     return () => unsub();
   }, []);
 
+  // Alert Sounds directly from Firebase!
+  useEffect(() => {
+    const unsub = api.subscribe((e: any) => {
+      if (e.data.type === 'NEW_ALERT' || e.data.type === 'STATUS_UPDATED') {
+        if (roleRef.current === 'caregiver') {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.play().catch(() => console.log('Audio autoplay blocked by browser. Please tap screen first.'));
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
   const handleLogout = async () => {
     setRole(null);
-    setLangSelected(false);
     await auth.signOut(); // Securely logs out of Firebase
   };
 
@@ -45,25 +63,25 @@ function App() {
   return (
     <div className="w-full min-h-screen bg-transparent font-sans">
       <AnimatePresence mode="wait">
-        {!langSelected && (
+        {!isLanguageSelected && (
           <LanguageSelection 
             key="language" 
-            onSelectLanguage={() => setLangSelected(true)} 
+            onSelectLanguage={() => setIsLanguageSelected(true)} 
           />
         )}
         
-        {langSelected && !role && (
+        {isLanguageSelected && !role && (
           <RoleSelection 
             key="role" 
             onSelectRole={(selectedRole) => setRole(selectedRole)} 
           />
         )}
 
-        {langSelected && role === 'elder' && (
+        {isLanguageSelected && role === 'elder' && (
           <ElderFlow key="elderFlow" onLogout={handleLogout} />
         )}
 
-        {langSelected && role === 'caregiver' && (
+        {isLanguageSelected && role === 'caregiver' && (
           <CaregiverFlow key="caregiverFlow" onLogout={handleLogout} />
         )}
       </AnimatePresence>

@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, Unsubscribe } from "firebase/firestore";
+import { getFirestore, collection, getDocs, doc, setDoc, getDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, Unsubscribe } from "firebase/firestore";
 import { getAuth, onAuthStateChanged, User } from "firebase/auth";
-import { Medicine, Status, Alert } from '../types/medicine';
+import { Medicine, Status, Alert, ElderProfile } from '../types/medicine';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDSCCgIB--MDbzoET0zzCfUPfv3d25XKg8",
@@ -23,13 +23,14 @@ let currentUser: User | null = null;
 let unsubMedicines: Unsubscribe | null = null;
 let unsubAlerts: Unsubscribe | null = null;
 let unsubMissed: Unsubscribe | null = null;
+let unsubProfile: Unsubscribe | null = null;
 
-// Auth Observer ensures strict security: we only listen to the active logged-in user's data
 onAuthStateChanged(auth, (user) => {
     currentUser = user;
     if (unsubMedicines) unsubMedicines();
     if (unsubAlerts) unsubAlerts();
     if (unsubMissed) unsubMissed();
+    if (unsubProfile) unsubProfile();
 
     if (user) {
         unsubMedicines = onSnapshot(collection(db, `users/${user.uid}/medicines`), () => {
@@ -41,10 +42,33 @@ onAuthStateChanged(auth, (user) => {
         unsubMissed = onSnapshot(collection(db, `users/${user.uid}/missed`), () => {
             eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'STATUS_UPDATED' } }));
         });
+        unsubProfile = onSnapshot(doc(db, `users/${user.uid}/profile/details`), () => {
+            eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'PROFILE_UPDATED' } }));
+        });
     }
 });
 
 export const api = {
+  getElderProfile: async (): Promise<ElderProfile> => {
+    if (!currentUser) return {} as ElderProfile;
+    const snap = await getDoc(doc(db, `users/${currentUser.uid}/profile/details`));
+    if (snap.exists()) {
+      return snap.data() as ElderProfile;
+    }
+    return {
+      name: "Elder Name",
+      age: "0",
+      bloodType: "Unknown",
+      allergies: "None",
+      emergencyContact: "Not Set"
+    };
+  },
+
+  updateElderProfile: async (profile: ElderProfile): Promise<void> => {
+    if (!currentUser) return;
+    await setDoc(doc(db, `users/${currentUser.uid}/profile/details`), profile);
+  },
+
   getCurrentMedicines: async (): Promise<Medicine[]> => {
     if (!currentUser) return [];
     const snap = await getDocs(collection(db, `users/${currentUser.uid}/medicines`));
@@ -124,8 +148,18 @@ export const api = {
     const q = query(collection(db, `users/${currentUser.uid}/alerts`), orderBy('timestamp', 'desc'));
     const snap = await getDocs(q);
     const alerts: Alert[] = [];
-    snap.forEach(d => alerts.push(d.data() as Alert));
+    snap.forEach(d => alerts.push({ id: d.id, ...(d.data() as Alert) }));
     return alerts;
+  },
+
+  deleteAlert: async (id: string): Promise<void> => {
+    if (!currentUser) return;
+    await deleteDoc(doc(db, `users/${currentUser.uid}/alerts`, id));
+  },
+
+  removeAlertPhoto: async (id: string): Promise<void> => {
+    if (!currentUser) return;
+    await setDoc(doc(db, `users/${currentUser.uid}/alerts`, id), { photo: null }, { merge: true });
   },
 
   subscribe: (callback: (event: MessageEvent) => void) => {
