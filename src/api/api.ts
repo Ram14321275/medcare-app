@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, addDoc, onSnapshot, query, orderBy } from "firebase/firestore";
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, Unsubscribe } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { Medicine, Status, Alert } from '../types/medicine';
 
 const firebaseConfig = {
@@ -13,51 +14,67 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+export const db = getFirestore(app);
+export const auth = getAuth(app);
 
-// Use an EventTarget to mimic the old local BroadcastChannel behavior for seamless React compatibility
 const eventBus = new EventTarget();
+let currentUser: User | null = null;
 
-// 🚀 REAL-TIME CLOUD LISTENERS: these trigger UI updates across ALL connected devices instantly!
-onSnapshot(collection(db, 'medicines'), () => {
-    eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'MEDICINES_UPDATED' } }));
+let unsubMedicines: Unsubscribe | null = null;
+let unsubAlerts: Unsubscribe | null = null;
+let unsubMissed: Unsubscribe | null = null;
+
+// Auth Observer ensures strict security: we only listen to the active logged-in user's data
+onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    if (unsubMedicines) unsubMedicines();
+    if (unsubAlerts) unsubAlerts();
+    if (unsubMissed) unsubMissed();
+
+    if (user) {
+        unsubMedicines = onSnapshot(collection(db, `users/${user.uid}/medicines`), () => {
+            eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'MEDICINES_UPDATED' } }));
+        });
+        unsubAlerts = onSnapshot(collection(db, `users/${user.uid}/alerts`), () => {
+            eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'NEW_ALERT' } }));
+        });
+        unsubMissed = onSnapshot(collection(db, `users/${user.uid}/missed`), () => {
+            eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'STATUS_UPDATED' } }));
+        });
+    }
 });
-
-onSnapshot(collection(db, 'alerts'), () => {
-    eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'NEW_ALERT' } }));
-});
-
-onSnapshot(collection(db, 'missed'), () => {
-    eventBus.dispatchEvent(new MessageEvent('message', { data: { type: 'STATUS_UPDATED' } }));
-});
-
 
 export const api = {
   getCurrentMedicines: async (): Promise<Medicine[]> => {
-    const snap = await getDocs(collection(db, 'medicines'));
+    if (!currentUser) return [];
+    const snap = await getDocs(collection(db, `users/${currentUser.uid}/medicines`));
     const meds: Medicine[] = [];
     snap.forEach(d => meds.push(d.data() as Medicine));
     return meds;
   },
   
   addMedicine: async (medicine: Medicine): Promise<{ success: boolean }> => {
-    await setDoc(doc(db, 'medicines', medicine.id), medicine);
+    if (!currentUser) return { success: false };
+    await setDoc(doc(db, `users/${currentUser.uid}/medicines`, medicine.id), medicine);
     return { success: true };
   },
 
   updateMedicine: async (medicine: Medicine): Promise<{ success: boolean }> => {
-    await setDoc(doc(db, 'medicines', medicine.id), medicine);
+    if (!currentUser) return { success: false };
+    await setDoc(doc(db, `users/${currentUser.uid}/medicines`, medicine.id), medicine);
     return { success: true };
   },
 
   deleteMedicine: async (id: string): Promise<{ success: boolean }> => {
-    await deleteDoc(doc(db, 'medicines', id));
+    if (!currentUser) return { success: false };
+    await deleteDoc(doc(db, `users/${currentUser.uid}/medicines`, id));
     return { success: true };
   },
 
   postMedicineStatus: async (status: Status): Promise<{ success: boolean }> => {
+    if (!currentUser) return { success: false };
     if (status.status === 'missed') {
-      const snap = await getDocs(collection(db, 'medicines'));
+      const snap = await getDocs(collection(db, `users/${currentUser.uid}/medicines`));
       let med: any = null;
       snap.forEach(d => {
          if (d.data().name === status.name) {
@@ -65,7 +82,7 @@ export const api = {
          }
       });
       if (med) {
-        await addDoc(collection(db, 'missed'), med);
+        await addDoc(collection(db, `users/${currentUser.uid}/missed`), med);
       }
     }
     
@@ -79,13 +96,15 @@ export const api = {
   },
 
   getMissedMedicines: async (): Promise<Medicine[]> => {
-    const snap = await getDocs(collection(db, 'missed'));
+    if (!currentUser) return [];
+    const snap = await getDocs(collection(db, `users/${currentUser.uid}/missed`));
     const meds: Medicine[] = [];
     snap.forEach(d => meds.push(d.data() as Medicine));
     return meds;
   },
 
   postAlert: async (message: string = 'SOS Alert Triggered!', photo?: string): Promise<{ success: boolean }> => {
+    if (!currentUser) return { success: false };
     api.createAlert({
       timestamp: new Date().toISOString(),
       type: 'emergency',
@@ -96,11 +115,13 @@ export const api = {
   },
 
   createAlert: async (alert: Alert) => {
-    await addDoc(collection(db, 'alerts'), alert);
+    if (!currentUser) return;
+    await addDoc(collection(db, `users/${currentUser.uid}/alerts`), alert);
   },
 
   getAlerts: async (): Promise<Alert[]> => {
-    const q = query(collection(db, 'alerts'), orderBy('timestamp', 'desc'));
+    if (!currentUser) return [];
+    const q = query(collection(db, `users/${currentUser.uid}/alerts`), orderBy('timestamp', 'desc'));
     const snap = await getDocs(q);
     const alerts: Alert[] = [];
     snap.forEach(d => alerts.push(d.data() as Alert));
