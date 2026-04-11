@@ -4,13 +4,13 @@ import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { Medicine, Status, Alert, ElderProfile } from '../types/medicine';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDSCCgIB--MDbzoET0zzCfUPfv3d25XKg8",
-  authDomain: "eldermed-db.firebaseapp.com",
-  projectId: "eldermed-db",
-  storageBucket: "eldermed-db.firebasestorage.app",
-  messagingSenderId: "444626262722",
-  appId: "1:444626262722:web:489a329012cfd05b67795b",
-  measurementId: "G-SSY77CXL8K"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -129,7 +129,7 @@ export const api = {
 
   postAlert: async (message: string = 'SOS Alert Triggered!', photo?: string): Promise<{ success: boolean }> => {
     if (!currentUser) return { success: false };
-    api.createAlert({
+    await api.createAlert({
       timestamp: new Date().toISOString(),
       type: 'emergency',
       message,

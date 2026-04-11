@@ -14,7 +14,7 @@ interface Message {
   content: string;
 }
 
-const GEMINI_API_KEY = "AIzaSyDyp0lPJp_qBY1tTfqLlHIVHKoP2wKdFIw";
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
   const { t } = useLanguage();

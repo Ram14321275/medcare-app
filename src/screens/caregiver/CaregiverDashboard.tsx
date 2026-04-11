@@ -19,8 +19,9 @@ const CaregiverDashboard: React.FC<Props> = ({ onNavigate, onLogout }) => {
   const fetchData = async () => {
     const medicines = await api.getCurrentMedicines();
     const missed = await api.getMissedMedicines();
+    const alerts = await api.getAlerts();
     setTotalMeds(medicines.length);
-    setMissedCount(missed.length);
+    setMissedCount(missed.length + alerts.length);
   };
 
   useEffect(() => {
@@ -74,7 +75,7 @@ const CaregiverDashboard: React.FC<Props> = ({ onNavigate, onLogout }) => {
                <div className="p-3 bg-white/20 text-white rounded-2xl">
                  <AlertCircle className="w-6 h-6" />
                </div>
-               <h3 className="text-xl font-bold text-white">{t('missedMedicines')}</h3>
+               <h3 className="text-xl font-bold text-white">Alerts & Missed</h3>
              </div>
              <ChevronRight className="w-6 h-6 text-white/50 group-hover:text-white transition-colors" />
           </div>
