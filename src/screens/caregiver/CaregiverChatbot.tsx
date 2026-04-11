@@ -14,7 +14,7 @@ interface Message {
   content: string;
 }
 
-const GEMINI_API_KEY = "AIzaSyAf5B8yqRufS3C0ryRH6UBkHGn8rKcAoDY";
+const GEMINI_API_KEY = "AIzaSyDyp0lPJp_qBY1tTfqLlHIVHKoP2wKdFIw";
 
 const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
   const { t } = useLanguage();
@@ -50,10 +50,10 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
 
       // Map our messages to Gemini's native API format
       const historyContents = messages.filter(m => m.role !== 'system').map(m => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }]
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
       }));
-      
+
       historyContents.push({ role: 'user', parts: [{ text: userMsg }] });
 
       const requestBody = {
@@ -97,7 +97,7 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
             return `\n\n✅ I have successfully added ${args.name || 'the medicine'} to the ${args.time_slot || 'morning'} schedule!`;
           } else if (toolName === 'delete_medicine') {
             const meds = await api.getCurrentMedicines();
-            if(!args.name) return `\n\n❌ I need a medicine name to delete.`;
+            if (!args.name) return `\n\n❌ I need a medicine name to delete.`;
             const toDelete = meds.find(m => m.name.toLowerCase() === args.name.toLowerCase());
             if (toDelete) {
               await api.deleteMedicine(toDelete.id);
@@ -106,7 +106,7 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
               return `\n\n❌ I couldn't find a medicine named "${args.name}" to delete.`;
             }
           }
-        } catch(e) {
+        } catch (e) {
           console.error("Tool execution error", e);
         }
         return '';
@@ -115,16 +115,16 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
       let cleanedResponse = assistantResponse;
       const jsonRegex = /\{[\s\S]*?"name"\s*:\s*"[^"]*"[\s\S]*?"parameters"\s*:\s*\{[\s\S]*\}\s*\}/g;
       const matches = assistantResponse.match(jsonRegex);
-      
+
       if (matches) {
         for (const str of matches) {
           try {
             const obj = JSON.parse(str);
             if (obj.name && obj.parameters) {
-               const toolResult = await executeToolJSON(obj.name, obj.parameters);
-               cleanedResponse = cleanedResponse.replace(str, toolResult);
+              const toolResult = await executeToolJSON(obj.name, obj.parameters);
+              cleanedResponse = cleanedResponse.replace(str, toolResult);
             }
-          } catch(e) { /* ignore bad json */ }
+          } catch (e) { /* ignore bad json */ }
         }
       }
       assistantResponse = cleanedResponse;
@@ -132,17 +132,17 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
       const finalMsg = assistantResponse.trim() || 'I have checked your schedule.';
       setMessages(prev => [...prev, { role: 'assistant', content: finalMsg }]);
     } catch (error: any) {
-       console.error(error);
-       setMessages(prev => [...prev, { role: 'assistant', content: `🚨 System Error: ${error.message}` }]);
+      console.error(error);
+      setMessages(prev => [...prev, { role: 'assistant', content: `🚨 System Error: ${error.message}` }]);
     } finally {
-       setLoading(false);
+      setLoading(false);
     }
   };
 
   return (
     <ScreenWrapper>
       <Header title={t('chatbot') as string || "AI Assistant"} onBack={onBack} />
-      
+
       <div className="flex flex-col flex-1 mt-6 bg-white rounded-3xl shadow-sm border-2 border-slate-100 overflow-hidden relative">
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {messages.map((msg, idx) => (
@@ -176,7 +176,7 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
 
         <div className="p-4 bg-slate-50 border-t-2 border-slate-100">
           <div className="flex gap-4">
-            <input 
+            <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -184,7 +184,7 @@ const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
               className="flex-1 p-4 text-xl rounded-full border-2 border-slate-200 focus:border-indigo-500 outline-none"
               placeholder="Ask Kind anything..."
             />
-            <button 
+            <button
               onClick={handleSend}
               disabled={loading || !input.trim()}
               className="w-16 h-16 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
