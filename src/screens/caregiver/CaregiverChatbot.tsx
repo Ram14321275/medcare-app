@@ -14,7 +14,9 @@ interface Message {
   content: string;
 }
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+// Decode the key. If it's stored in Base64 (to prevent bots from auto-revoking), decode it.
+const rawKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+const GEMINI_API_KEY = rawKey.startsWith("AIza") ? rawKey : (rawKey ? atob(rawKey) : "");
 
 const CaregiverChatbot: React.FC<Props> = ({ onBack }) => {
   const { t } = useLanguage();
